@@ -11,9 +11,13 @@ $script:EnergiaItens = @(
     @{ Id = 'Suspensao';  Texto = 'Nao suspender (tomada e bateria)';     Sub = 'SUB_SLEEP'; Set = 'STANDBYIDLE';   Valor = 0 }
     @{ Id = 'Hibernacao'; Texto = 'Nao hibernar';                          Sub = 'SUB_SLEEP'; Set = 'HIBERNATEIDLE'; Valor = 0 }
     @{ Id = 'Tampa';      Texto = 'Tampa fechada: nao fazer nada';         Sub = '4f971e89-eebd-4455-a8de-9e59040e7347'; Set = '5ca83367-6e45-459f-a27b-476b1d01c936'; Valor = 0 }
-    @{ Id = 'Tela';       Texto = 'Apagar a tela em 5 min';               Sub = 'SUB_VIDEO'; Set = 'VIDEOIDLE';     Valor = 300 }
-    @{ Id = 'Update';     Texto = 'Impedir reinicio automatico do Windows Update' }
+    @{ Id = 'Tela';       Texto = 'Nao apagar a tela';                    Sub = 'SUB_VIDEO'; Set = 'VIDEOIDLE';     Valor = 0 }
+    @{ Id = 'Update';    Texto = 'Impedir reinicio automatico do Windows Update' }
 )
+
+if (-not ('EnergiaWin' -as [type])) {
+    Add-Type -Namespace '' -Name EnergiaWin -MemberDefinition '[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);'
+}
 
 function Ler-Power($item) {
     $hex = [regex]::Matches((powercfg /query SCHEME_CURRENT $item.Sub $item.Set) -join "`n", '0x([0-9a-fA-F]+)') | ForEach-Object { [Convert]::ToInt64($_.Groups[1].Value, 16) }
@@ -53,6 +57,7 @@ function Add-AbaEnergia {
     $form = $tabs.FindForm()
 
     $itens = $script:EnergiaItens
+    $estadoPath = $script:EnergiaEstadoPath   # GetNewClosure nao enxerga $script:, entao copia para local
 
     # Estado: guarda o valor original de cada item aplicado. Item presente = modo ativo nele.
     $estado = @{}
@@ -87,8 +92,26 @@ function Add-AbaEnergia {
     $status.ForeColor = [Drawing.Color]::DimGray
     $page.Controls.Add($status)
 
+    # Acao unica: nao mexe em configuracao nem em estado.json; so apaga a tela depois de 5 s.
+    $apagar = New-Object Windows.Forms.Button
+    $apagar.Text = 'Apagar tela (5 s)'
+    $apagar.SetBounds(15, 200, 160, 30)
+    $page.Controls.Add($apagar)
+    $apagar.Add_Click({
+        $apagar.Enabled = $false
+        $t = New-Object Windows.Forms.Timer
+        $t.Interval = 5000
+        $t.Add_Tick({
+            $t.Stop(); $t.Dispose()
+            # WM_SYSCOMMAND(0x112) / SC_MONITORPOWER(0xF170) / 2 = desligar monitor; HWND_BROADCAST = 0xFFFF
+            [EnergiaWin]::PostMessage([IntPtr]0xFFFF, 0x112, [IntPtr]0xF170, [IntPtr]2) | Out-Null
+            $apagar.Enabled = $true
+        }.GetNewClosure())
+        $t.Start()
+    }.GetNewClosure())
+
     $botao = New-Object Windows.Forms.Button
-    $botao.Text = [char]0x25B6 + ' Executar'
+    $botao.Text =[char]0x25B6 + ' Executar'
     $botao.SetBounds(270, 240, 110, 34)
     $page.Controls.Add($botao)
     if ($form) { $form.AcceptButton = $botao }
@@ -105,7 +128,8 @@ function Add-AbaEnergia {
                     } else {
                         $orig = Ler-Power $item
                         # shortcut: suspensao ja em 0 (start_project rodou antes) volta para 30 min, como o stop_project.
-                        if ($item.Id -eq 'Suspensao') { foreach ($k in 'ac', 'dc') { if ($orig[$k] -eq 0) { $orig[$k] = 1800 } } }
+                        $padrao = @{ Suspensao = 1800; Tela = 300 }[$item.Id]
+                        if ($padrao) { foreach ($k in 'ac', 'dc') { if ($orig[$k] -eq 0) { $orig[$k] = $padrao } } }
                         $estado[$item.Id] = $orig
                         Gravar-Power $item $item.Valor $item.Valor
                     }
@@ -115,7 +139,7 @@ function Add-AbaEnergia {
                     $estado.Remove($item.Id)
                 }
             }
-            $estado | ConvertTo-Json | Set-Content $script:EnergiaEstadoPath -Encoding UTF8
+            $estado | ConvertTo-Json | Set-Content $estadoPath -Encoding UTF8
             $n = $estado.Count
             $status.Text = if ($n) { "Ativo em $n item(ns)." } else { 'Tudo no valor original.' }
         } catch {
