@@ -17,7 +17,8 @@ function Add-AbaOtimizacao {
     $page.UseVisualStyleBackColor = $true
     $tabs.TabPages.Add($page)
 
-    $projeto = 'C:\Users\[REMOVIDO]\Documents\VSCODE\GIT\OTIMIZAR_WINDOWS'
+    # Pasta-irmã de PAINEL_DEV (sem caminho fixo de usuário).
+    $projeto = Join-Path (Split-Path $PSScriptRoot -Parent | Split-Path -Parent) 'OTIMIZAR_WINDOWS'
     $executar = Join-Path $projeto 'executar.ps1'
     $reverter = Join-Path $projeto 'reverter.ps1'
     $achou = (Test-Path $executar) -and (Test-Path $reverter)
