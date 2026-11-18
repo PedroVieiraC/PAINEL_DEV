@@ -1,0 +1,7 @@
+title: "Painel Dev"
+summary: "Painel de desktop em PowerShell para tarefas do dia a dia no Windows: energia, monitor de sistema, limpeza, rede, dev e controle do Windows Defender."
+category: automation
+problem: "Várias ferramentas e telas de configuração do Windows espalhadas, usadas com frequência no dia a dia de desenvolvimento."
+approach: "Painel único em WinForms que roda elevado, com cada funcionalidade isolada num módulo PowerShell plugável."
+stack: [PowerShell, WinForms, Windows]
+status: active
