@@ -5,3 +5,4 @@ problem: "Várias ferramentas e telas de configuração do Windows espalhadas, u
 approach: "Painel único em WinForms que roda elevado, com cada funcionalidade isolada num módulo PowerShell plugável."
 stack: [PowerShell, WinForms, Windows]
 status: active
+# top: 1 a 5 (posição no Top 5 do portfólio; sem valor, fora do Top 5)
